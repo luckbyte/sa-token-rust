@@ -5,11 +5,25 @@ set -euo pipefail
 WORKSPACE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SLEEP_SECONDS="${SLEEP_SECONDS:-5}"
 VERIFY="${VERIFY:-1}" # 1=发布前执行一次 workspace 校验，0=跳过
+SKIP_PUBLISHED="${SKIP_PUBLISHED:-1}" # 1=已发布版本自动跳过，0=遇到已发布直接失败
 
 publish() {
   local manifest="$1"
+  local output
+
   echo "Publishing ${manifest}..."
-  cargo publish --manifest-path "$manifest"
+  if output="$(cargo publish --manifest-path "$manifest" 2>&1)"; then
+    echo "$output"
+  else
+    echo "$output"
+    if [[ "$SKIP_PUBLISHED" == "1" ]] && [[ "$output" == *"already exists on crates.io index"* ]]; then
+      echo "Skip published crate: ${manifest}"
+      return 0
+    fi
+    echo "Publish failed: ${manifest}"
+    return 1
+  fi
+
   echo "Waiting ${SLEEP_SECONDS}s for crates.io index to update..."
   sleep "${SLEEP_SECONDS}"
 }
